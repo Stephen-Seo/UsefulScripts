@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Note that this script only sets up client connections to a server.
+# This means that the confs will be generated without
+# client-to-client connections.
+
 set -e
 
 function print_help {
