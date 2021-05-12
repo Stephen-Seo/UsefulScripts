@@ -11,6 +11,7 @@ function print_help {
     echo "-h - prints this help"
     echo "-n <name> - gives a name to the config"
     echo "-c <count> - number of clients to generate for"
+    echo "-s <ipv4_second> - sets the second byte of the ipv4"
     echo "-i <ipv4_third> - sets the third byte of the ipv4"
     echo "-e <endpoint> - ip address or domain name (required)"
     echo "-p <port> - listen port of server (defaults to 50000)"
@@ -21,7 +22,7 @@ function print_help {
 WGNAME="wg$(date | sha1sum | head -c 8)"
 CLIENT_COUNT=1
 IPV4_FIRST=10
-IPV4_SECOND=8
+IPV4_SECOND=8 # this can be modified with "-s <integer>"
 IPV4_THIRD=0 # this can be modified with "-i <integer>"
 # IPV4_FOURTH is generated automatically. Server starts with 1, and clients increment afterward.
 SERVER_ENDPOINT="REQUIRED"
@@ -30,7 +31,7 @@ ENABLE_PERSISTENT_KEEPALIVE=0
 CONFIG_OUTPUT_DIRECTORY="REQUIRED"
 
 # OPTARG
-while getopts 'hn:c:i:e:p:ko:' opt; do
+while getopts 'hn:c:s:i:e:p:ko:' opt; do
     if [ "$opt" == "?" ]; then
         print_help
         exit 1
@@ -41,8 +42,18 @@ while getopts 'hn:c:i:e:p:ko:' opt; do
         WGNAME="$OPTARG"
     elif [ "$opt" == "c" ]; then
         CLIENT_COUNT="$OPTARG"
+    elif [ "$opt" == "s" ]; then
+        IPV4_SECOND="$OPTARG"
+        if (($IPV4_SECOND < 0 || $IPV4_SECOND > 255)); then
+            echo "ERROR: IPV4_SECOND is out of range of a byte"
+            exit 7
+        fi
     elif [ "$opt" == "i" ]; then
         IPV4_THIRD="$OPTARG"
+        if (($IPV4_THIRD < 0 || $IPV4_THIRD > 255)); then
+            echo "ERROR: IPV4_THIRD is out of range of a byte"
+            exit 8
+        fi
     elif [ "$opt" == "e" ]; then
         SERVER_ENDPOINT="$OPTARG"
     elif [ "$opt" == "p" ]; then
