@@ -123,7 +123,7 @@ elif (( $WG_SUBNET > 24 )); then
         USED_BITS=$(( $USED_BITS - 1 ))
     done
 
-    CLIENT_COUNT=$(( 2**(32 - $WG_SUBNET) - 2 ))
+    CLIENT_COUNT=$(( 2**(32 - $WG_SUBNET) - 2 - 1 ))
 fi
 
 echo "Creating config with name \"$WGNAME\" with \"$CLIENT_COUNT\" clients and subnet \"$WG_SUBNET\"..."
