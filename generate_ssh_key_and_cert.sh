@@ -3,6 +3,8 @@
 # This script generates a rsa/ed25519 ssh key signed by a CA key (the CA key
 # must be on the machine or the CA key's public key can be specified and
 # ssh-agent will be used to sign with the CA key).
+#
+# See the CERTIFICATES section in the `ssh-keygen` man-page.
 
 # Set this to 0 to disable use of gpg-agent.
 GPG_AGENT_ENABLED=1
