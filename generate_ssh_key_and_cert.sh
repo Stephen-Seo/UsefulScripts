@@ -150,19 +150,33 @@ else
 fi
 
 if (( CA_KEY_THROUGH_SSH_AGENT )) && [[ -r "$CA_KEY_PATH" ]]; then
-    (( GPG_AGENT_ENABLED )) && gpg-connect-agent updatestartuptty /bye >&/dev/null
-    ssh-keygen -Us "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" "${USER_PUBKEY_NAME}"
-    if (( $? != 0 )); then
-        echo "ERROR: Failed to sign certificate!"
-        exit 1
-    fi
+    for ((i=0; i<3; ++i)); do
+        echo 'Signing certificate...'
+        (( GPG_AGENT_ENABLED )) && gpg-connect-agent updatestartuptty /bye >&/dev/null
+        ssh-keygen -Us "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" "${USER_PUBKEY_NAME}"
+        if (( $? != 0 )); then
+            echo "ERROR: Failed to sign certificate!"
+            if (( i >= 2 )); then
+                exit 1
+            fi
+        else
+            break
+        fi
+    done
 elif [[ -r "$CA_KEY_PATH" ]]; then
-    (( GPG_AGENT_ENABLED )) && gpg-connect-agent updatestartuptty /bye >&/dev/null
-    ssh-keygen -s "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" "${USER_PUBKEY_NAME}"
-    if (( $? != 0 )); then
-        echo "ERROR: Failed to sign certificate!"
-        exit 1
-    fi
+    for ((i=0; i<3; ++i)); do
+        echo 'Signing certificate...'
+        (( GPG_AGENT_ENABLED )) && gpg-connect-agent updatestartuptty /bye >&/dev/null
+        ssh-keygen -s "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" "${USER_PUBKEY_NAME}"
+        if (( $? != 0 )); then
+            echo "ERROR: Failed to sign certificate!"
+            if (( i >= 2 )); then
+                exit 1
+            fi
+        else
+            break
+        fi
+    done
 else
     echo "ERROR: Invalid settings for CA key!"
     exit 1
