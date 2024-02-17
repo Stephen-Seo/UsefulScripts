@@ -161,7 +161,7 @@ mkdir -p "$HOME/temp"
 TEMP_DIR=$(mktemp -d -p "$HOME/temp")
 
 # first create server config
-SERVER_CONF="${TEMP_DIR}/${WGNAME}server.conf"
+SERVER_CONF="${TEMP_DIR}/${WGNAME}serv.conf"
 SERVER_PRK="$(wg genkey)"
 SERVER_PUB="$(echo -n ${SERVER_PRK} | wg pubkey)"
 
@@ -175,7 +175,7 @@ EOF
 
 # generate config per each client
 for ((i = 0; i < $CLIENT_COUNT; ++i)); do
-    CLIENT_CONF="${TEMP_DIR}/${WGNAME}client${i}.conf"
+    CLIENT_CONF="${TEMP_DIR}/${WGNAME}cli${i}.conf"
     CLIENT_PRK="$(wg genkey)"
     CLIENT_PUB="$(echo -n ${CLIENT_PRK} | wg pubkey)"
     CLIENT_PRE="$(wg genpsk)"
@@ -215,7 +215,7 @@ echo "Placing generated configs to output directory..."
 
 cp -v "$SERVER_CONF" "${CONFIG_OUTPUT_DIRECTORY}/"
 for ((i = 0; i < $CLIENT_COUNT; ++i)); do
-    cp -v "${TEMP_DIR}/${WGNAME}client${i}.conf" "${CONFIG_OUTPUT_DIRECTORY}/"
+    cp -v "${TEMP_DIR}/${WGNAME}cli${i}.conf" "${CONFIG_OUTPUT_DIRECTORY}/"
 done
 
 echo "Removing temporary directory..."
