@@ -19,6 +19,7 @@ function print_help {
     echo "-o <directory> - output dir to place configs (required)"
     echo "-u <subnet> - subnet to use (default 24). Mutually exclusive with \"-c\""
     echo "-f <ipv4_fourth> - must use with \"-u\" to set partial fourth byte"
+    echo "-x <ipv6_template> - set template, \"x\" will be replaced (must be last)"
 }
 
 WGNAME="wg$(date | sha1sum | head -c 8)"
@@ -35,9 +36,10 @@ WG_SUBNET=24
 CLIENT_COUNT_SET=0
 WG_SUBNET_SET=0
 IPV4_FOURTH_SET=0
+IPV6_TEMPLATE="fc00::x"
 
 # OPTARG
-while getopts 'hn:c:s:i:e:p:ko:u:f:' opt; do
+while getopts 'hn:c:s:i:e:p:ko:u:f:x:' opt; do
     if [ "$opt" == "?" ]; then
         print_help
         exit 1
@@ -82,6 +84,8 @@ while getopts 'hn:c:s:i:e:p:ko:u:f:' opt; do
     elif [ "$opt" == "f" ]; then
         IPV4_FOURTH="$OPTARG"
         IPV4_FOURTH_SET=1
+    elif [ "$opt" == "x" ]; then
+        IPV6_TEMPLATE="$OPTARG"
     fi
 done
 
@@ -101,6 +105,12 @@ elif (( $CLIENT_COUNT_SET )) && (( $WG_SUBNET_SET )); then
 elif (( $IPV4_FOURTH_SET )) && (( $WG_SUBNET_SET == 0 )); then
     echo "ERROR: fourth byte set but \"-u\" not used!"
     exit 13
+elif ! [[ "$IPV6_TEMPLATE" =~ .*x$ ]]; then
+    echo "ERROR: IPV6_TEMPLATE is invalid (does not end in x)!"
+    exit 14
+elif ! [[ "$IPV6_TEMPLATE" =~ ^fc.*$ ]] && ! [[ "$IPV6_TEMPLATE" =~ ^fd.*$ ]]; then
+    echo "ERROR: IPV6_TEMPLATE is invalid (not in local address range)!"
+    exit 15
 fi
 
 # validation of "-u <subnet>"
@@ -126,7 +136,25 @@ elif (( $WG_SUBNET > 24 )); then
     CLIENT_COUNT=$(( 2**(32 - $WG_SUBNET) - 2 - 1 ))
 fi
 
-echo "Creating config with name \"$WGNAME\" with \"$CLIENT_COUNT\" clients and subnet \"$WG_SUBNET\"..."
+IPV6_SUBNET=$(( 128 - (32 - WG_SUBNET ) ))
+
+function to_ipv6_from_template() {
+    if (( $1 < (1 << 8) )); then
+        echo "${IPV6_TEMPLATE/x/$(printf "%04x" "$1")}"
+    elif (( $1 < (1 << 16) )); then
+        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 8) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
+    elif (( $1 < (1 << 24) )); then
+        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 16) & 0xFFFF)) ):$(printf "%04x" $(( ($1 >> 8) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
+    elif (( $1 < (1 << 32) )); then
+        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 24) & 0xFFFF)) ):$(printf "%04x" $(( ($1 >> 16) & 0xFFFF)) ):$(printf "%04x" $(( ($1 >> 8) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
+    else
+        echo "ERROR"
+        return 1
+    fi
+    return 0
+}
+
+echo "Creating config with name \"$WGNAME\" with \"$CLIENT_COUNT\" clients and ipv4 subnet \"$WG_SUBNET\"..."
 
 mkdir -p "$HOME/temp"
 
@@ -140,7 +168,7 @@ SERVER_PUB="$(echo -n ${SERVER_PRK} | wg pubkey)"
 echo "Creating server conf (will be appended to with client info)..."
 cat >> "${SERVER_CONF}" <<EOF
 [Interface]
-Address = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/$WG_SUBNET
+Address = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/$WG_SUBNET, $(to_ipv6_from_template 1)/${IPV6_SUBNET}
 ListenPort = ${SERVER_LISTEN_PORT}
 PrivateKey = ${SERVER_PRK}
 EOF
@@ -158,19 +186,19 @@ for ((i = 0; i < $CLIENT_COUNT; ++i)); do
 [Peer]
 PublicKey = ${CLIENT_PUB}
 PresharedKey = ${CLIENT_PRE}
-AllowedIPs = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/32
+AllowedIPs = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/32, $(to_ipv6_from_template $(($i + 2)) )/128
 EOF
 
     echo "Creating client $((i + 1)) conf..."
     cat >> "${CLIENT_CONF}" <<EOF
 [Interface]
-Address = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/$WG_SUBNET
+Address = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/$WG_SUBNET, $(to_ipv6_from_template $(($i + 2)) )/${IPV6_SUBNET}
 PrivateKey = ${CLIENT_PRK}
 
 [Peer]
 PublicKey = ${SERVER_PUB}
 PresharedKey = ${CLIENT_PRE}
-AllowedIPs = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/32
+AllowedIPs = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/32, $(to_ipv6_from_template 1)/128
 Endpoint = ${SERVER_ENDPOINT}:${SERVER_LISTEN_PORT}
 EOF
 
