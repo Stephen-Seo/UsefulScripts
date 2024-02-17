@@ -117,7 +117,7 @@ fi
 if (( $WG_SUBNET < 24 )); then
     echo "ERROR: subnet cannot be less than 24!"
     exit 9
-elif (( $WG_SUBNET > 24 )); then
+elif (( $WG_SUBNET >= 24 )); then
     USED_BITS=$(( 32 - $WG_SUBNET ))
     if (( $USED_BITS < 2 )); then
         echo "ERROR: subnet \"$WG_SUBNET\" is too large! Use 24-30!"
