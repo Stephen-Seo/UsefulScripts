@@ -139,14 +139,10 @@ fi
 IPV6_SUBNET=$(( 128 - (32 - WG_SUBNET ) ))
 
 function to_ipv6_from_template() {
-    if (( $1 < (1 << 8) )); then
+    if (( $1 < (1 << 16) )); then
         echo "${IPV6_TEMPLATE/x/$(printf "%04x" "$1")}"
-    elif (( $1 < (1 << 16) )); then
-        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 8) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
-    elif (( $1 < (1 << 24) )); then
-        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 16) & 0xFFFF)) ):$(printf "%04x" $(( ($1 >> 8) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
     elif (( $1 < (1 << 32) )); then
-        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 24) & 0xFFFF)) ):$(printf "%04x" $(( ($1 >> 16) & 0xFFFF)) ):$(printf "%04x" $(( ($1 >> 8) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
+        echo "${IPV6_TEMPLATE/x/$(printf "%04x" $(( ($1 >> 16) & 0xFFFF )) ):$(printf "%04x" $(( $1 & 0xFFFF )) )}"
     else
         echo "ERROR"
         return 1
