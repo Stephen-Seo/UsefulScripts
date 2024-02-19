@@ -20,6 +20,7 @@ function print_help {
     echo "-u <subnet> - subnet to use (default 24). Mutually exclusive with \"-c\""
     echo "-f <ipv4_fourth> - must use with \"-u\" to set partial fourth byte"
     echo "-x <ipv6_template> - set template, \"x\" will be replaced (must be last)"
+    echo "-d - disable ipv6 addresses"
 }
 
 WGNAME="wg$(date | sha1sum | head -c 8)"
@@ -37,9 +38,10 @@ CLIENT_COUNT_SET=0
 WG_SUBNET_SET=0
 IPV4_FOURTH_SET=0
 IPV6_TEMPLATE="fc00::x"
+IPV6_DISABLE=0
 
 # OPTARG
-while getopts 'hn:c:s:i:e:p:ko:u:f:x:' opt; do
+while getopts 'hn:c:s:i:e:p:ko:u:f:x:d' opt; do
     if [ "$opt" == "?" ]; then
         print_help
         exit 1
@@ -86,6 +88,8 @@ while getopts 'hn:c:s:i:e:p:ko:u:f:x:' opt; do
         IPV4_FOURTH_SET=1
     elif [ "$opt" == "x" ]; then
         IPV6_TEMPLATE="$OPTARG"
+    elif [ "$opt" == "d" ]; then
+        IPV6_DISABLE=1
     fi
 done
 
@@ -105,10 +109,10 @@ elif (( $CLIENT_COUNT_SET )) && (( $WG_SUBNET_SET )); then
 elif (( $IPV4_FOURTH_SET )) && (( $WG_SUBNET_SET == 0 )); then
     echo "ERROR: fourth byte set but \"-u\" not used!"
     exit 13
-elif ! [[ "$IPV6_TEMPLATE" =~ .*x$ ]]; then
+elif ! (( IPV6_DISABLE)) && ! [[ "$IPV6_TEMPLATE" =~ .*x$ ]]; then
     echo "ERROR: IPV6_TEMPLATE is invalid (does not end in x)!"
     exit 14
-elif ! [[ "$IPV6_TEMPLATE" =~ ^fc.*$ ]] && ! [[ "$IPV6_TEMPLATE" =~ ^fd.*$ ]]; then
+elif ! (( IPV6_DISABLE)) && ! [[ "$IPV6_TEMPLATE" =~ ^fc.*$ ]] && ! [[ "$IPV6_TEMPLATE" =~ ^fd.*$ ]]; then
     echo "ERROR: IPV6_TEMPLATE is invalid (not in local address range)!"
     exit 15
 fi
@@ -156,6 +160,14 @@ mkdir -p "$HOME/temp"
 
 TEMP_DIR=$(mktemp -d -p "$HOME/temp")
 
+if (( IPV6_DISABLE )); then
+    SERVER_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/$WG_SUBNET"
+    PEER_SERVER_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/32"
+else
+    SERVER_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/$WG_SUBNET, $(to_ipv6_from_template 1)/${IPV6_SUBNET}"
+    PEER_SERVER_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/32, $(to_ipv6_from_template 1)/128"
+fi
+
 # first create server config
 SERVER_CONF="${TEMP_DIR}/${WGNAME}serv.conf"
 SERVER_PRK="$(wg genkey)"
@@ -164,7 +176,7 @@ SERVER_PUB="$(echo -n ${SERVER_PRK} | wg pubkey)"
 echo "Creating server conf (will be appended to with client info)..."
 cat >> "${SERVER_CONF}" <<EOF
 [Interface]
-Address = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/$WG_SUBNET, $(to_ipv6_from_template 1)/${IPV6_SUBNET}
+Address = ${SERVER_ADDRESS_STR}
 ListenPort = ${SERVER_LISTEN_PORT}
 PrivateKey = ${SERVER_PRK}
 EOF
@@ -176,25 +188,33 @@ for ((i = 0; i < $CLIENT_COUNT; ++i)); do
     CLIENT_PUB="$(echo -n ${CLIENT_PRK} | wg pubkey)"
     CLIENT_PRE="$(wg genpsk)"
 
+    if (( IPV6_DISABLE )); then
+        CLIENT_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/$WG_SUBNET"
+        PEER_CLIENT_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/32"
+    else
+        CLIENT_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/$WG_SUBNET, $(to_ipv6_from_template $(($i + 2)) )/${IPV6_SUBNET}"
+        PEER_CLIENT_ADDRESS_STR="${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/32, $(to_ipv6_from_template $(($i + 2)) )/128"
+    fi
+
     echo "Appending client $((i + 1)) to server conf..."
     cat >> "${SERVER_CONF}" <<EOF
 
 [Peer]
 PublicKey = ${CLIENT_PUB}
 PresharedKey = ${CLIENT_PRE}
-AllowedIPs = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/32, $(to_ipv6_from_template $(($i + 2)) )/128
+AllowedIPs = ${PEER_CLIENT_ADDRESS_STR}
 EOF
 
     echo "Creating client $((i + 1)) conf..."
     cat >> "${CLIENT_CONF}" <<EOF
 [Interface]
-Address = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( (i + 2) | $IPV4_FOURTH ))/$WG_SUBNET, $(to_ipv6_from_template $(($i + 2)) )/${IPV6_SUBNET}
+Address = ${CLIENT_ADDRESS_STR}
 PrivateKey = ${CLIENT_PRK}
 
 [Peer]
 PublicKey = ${SERVER_PUB}
 PresharedKey = ${CLIENT_PRE}
-AllowedIPs = ${IPV4_FIRST}.${IPV4_SECOND}.${IPV4_THIRD}.$(( 1 | $IPV4_FOURTH ))/32, $(to_ipv6_from_template 1)/128
+AllowedIPs = ${PEER_SERVER_ADDRESS_STR}
 Endpoint = ${SERVER_ENDPOINT}:${SERVER_LISTEN_PORT}
 EOF
 
