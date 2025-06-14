@@ -32,3 +32,11 @@ subnets, you can run the following:
 
 If `ipv6` is not desired, you can skip specifying `-x ...` and use `-d` to
 disable `ipv6` generation.
+
+## set_pactl_sink_vol_by_ident.sh
+
+Expects opts: `-n <identifier>`, `-p <percentage>`.
+
+## toggle_pactl_sink_mute_by_ident.sh
+
+Expects opt: `-n <identifier>`.
