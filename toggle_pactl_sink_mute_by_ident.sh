@@ -32,6 +32,11 @@ if (( ${#SINK_NUMBER_A[*]} > 1 )); then
     exit 1
 fi
 
+if [[ -z "${SINK_NUMBER_A}" ]]; then
+    echo 'ERROR: No Sinks match given ident!'
+    exit 1
+fi
+
 pactl set-sink-mute ${SINK_NUMBER_A} toggle
 
 notify-send -t 4000 "Volume $(pactl get-sink-mute ${SINK_NUMBER_A})" "$SINK_IDENT"

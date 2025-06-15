@@ -49,6 +49,11 @@ if (( ${#SINK_NUMBER_A[*]} > 1 )); then
     exit 1
 fi
 
+if [[ -z "${SINK_NUMBER_A}" ]]; then
+    echo 'ERROR: No Sinks match given ident!'
+    exit 1
+fi
+
 pactl set-sink-volume ${SINK_NUMBER_A} "${SET_PERCENTAGE}%"
 
 notify-send -t 4000 "Volume ${SET_PERCENTAGE}% Set" "${SINK_IDENT} #${SINK_NUMBER_A}"
