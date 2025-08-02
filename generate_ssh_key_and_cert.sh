@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
 
-# This script generates a rsa/ed25519 ssh key signed by a CA key (the CA key
-# must be on the machine or the CA key's public key can be specified and
-# ssh-agent will be used to sign with the CA key).
-#
-# See the CERTIFICATES section in the `ssh-keygen` man-page.
-
-# Set this to 0 to disable use of gpg-agent.
-GPG_AGENT_ENABLED=1
 CA_KEY_THROUGH_SSH_AGENT=0
 CA_KEY_PATH=""
 USER_KEY_RSA=0
@@ -16,6 +8,11 @@ USER_KEY_NAME=""
 USER_KEY_IDENTIFIER="temp_key"
 USER_KEY_USER_NAME=""
 USER_KEY_EXPIRE_TIME="+15m"
+CERT_OPTIONS=(
+    clear
+    permit-port-forwarding
+    permit-pty
+)
 
 read -p "Set key identifier? (Default \"temp_key\") [y/N]> " user_input
 
@@ -101,18 +98,20 @@ while (( USING_EXISTING_KEY )); do
 done
 
 if [[ -z "$EXISTING_PUBKEY_PATH" ]]; then
-    while true; do
-        read -p "Generate RSA or ED25519 key? [r/e]> " user_input
-        if [[ "$user_input" == [rR] ]]; then
-            USER_KEY_RSA=1
-            echo "Using RSA."
-            break
-        elif [[ "$user_input" == [eE] ]]; then
-            USER_KEY_ED25519=1
-            echo "Using ED25519."
-            break
-        fi
-    done
+    echo "force defaulting to rsa..."
+    USER_KEY_RSA=1
+    #while true; do
+    #    read -p "Generate RSA or ED25519 key? [r/e]> " user_input
+    #    if [[ "$user_input" == [rR] ]]; then
+    #        USER_KEY_RSA=1
+    #        echo "Using RSA."
+    #        break
+    #    elif [[ "$user_input" == [eE] ]]; then
+    #        USER_KEY_ED25519=1
+    #        echo "Using ED25519."
+    #        break
+    #    fi
+    #done
 
     while true; do
         read -p "Specify key name: > " user_input
@@ -124,8 +123,8 @@ if [[ -z "$EXISTING_PUBKEY_PATH" ]]; then
     done
 
     if (( USER_KEY_RSA )); then
-        echo ssh-keygen -t rsa -b 4096 -a 100 -o -f "$USER_KEY_NAME"
-        ssh-keygen -t rsa -b 4096 -a 100 -o -f "$USER_KEY_NAME"
+        echo ssh-keygen -t rsa -b 3072 -a 100 -o -f "$USER_KEY_NAME"
+        ssh-keygen -t rsa -b 3072 -a 100 -o -f "$USER_KEY_NAME"
     elif (( USER_KEY_ED25519 )); then
         echo ssh-keygen -t ed25519 -a 100 -o -f "$USER_KEY_NAME"
         ssh-keygen -t ed25519 -a 100 -o -f "$USER_KEY_NAME"
@@ -149,11 +148,28 @@ else
     USER_PUBKEY_NAME="${USER_KEY_NAME}.pub"
 fi
 
+echo "Enabled cert perms: ${CERT_OPTIONS[*]}"
+read -p "Restrict to pty only? [y/N]> " user_input
+if [[ -n "$user_input" ]] && [[ "$user_input" == [yY] ]]; then
+    CERT_OPTIONS=(
+        clear
+        permit-pty
+    )
+fi
+
+echo "Using CERT_OPTIONS: ${CERT_OPTIONS[*]}"
+
+CERT_OPT_STRING=""
+
+for word in "${CERT_OPTIONS[@]}"; do
+    CERT_OPT_STRING="$CERT_OPT_STRING -O $word"
+done
+
 if (( CA_KEY_THROUGH_SSH_AGENT )) && [[ -r "$CA_KEY_PATH" ]]; then
     for ((i=0; i<3; ++i)); do
         echo 'Signing certificate...'
-        (( GPG_AGENT_ENABLED )) && gpg-connect-agent updatestartuptty /bye >&/dev/null
-        ssh-keygen -Us "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" "${USER_PUBKEY_NAME}"
+        gpg-connect-agent updatestartuptty /bye >&/dev/null
+        ssh-keygen -Us "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" $CERT_OPT_STRING "${USER_PUBKEY_NAME}"
         if (( $? != 0 )); then
             echo "ERROR: Failed to sign certificate!"
             if (( i >= 2 )); then
@@ -166,8 +182,8 @@ if (( CA_KEY_THROUGH_SSH_AGENT )) && [[ -r "$CA_KEY_PATH" ]]; then
 elif [[ -r "$CA_KEY_PATH" ]]; then
     for ((i=0; i<3; ++i)); do
         echo 'Signing certificate...'
-        (( GPG_AGENT_ENABLED )) && gpg-connect-agent updatestartuptty /bye >&/dev/null
-        ssh-keygen -s "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" "${USER_PUBKEY_NAME}"
+        gpg-connect-agent updatestartuptty /bye >&/dev/null
+        ssh-keygen -s "$CA_KEY_PATH" -I "$USER_KEY_IDENTIFIER" -V "$USER_KEY_EXPIRE_TIME" -n "$USER_KEY_USER_NAME" $CERT_OPT_STRING "${USER_PUBKEY_NAME}"
         if (( $? != 0 )); then
             echo "ERROR: Failed to sign certificate!"
             if (( i >= 2 )); then
