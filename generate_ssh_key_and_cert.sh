@@ -123,8 +123,8 @@ if [[ -z "$EXISTING_PUBKEY_PATH" ]]; then
     done
 
     if (( USER_KEY_RSA )); then
-        echo ssh-keygen -t rsa -b 3072 -a 100 -o -f "$USER_KEY_NAME"
-        ssh-keygen -t rsa -b 3072 -a 100 -o -f "$USER_KEY_NAME"
+        echo ssh-keygen -t rsa -b 5120 -a 100 -o -f "$USER_KEY_NAME"
+        ssh-keygen -t rsa -b 5120 -a 100 -o -f "$USER_KEY_NAME"
     elif (( USER_KEY_ED25519 )); then
         echo ssh-keygen -t ed25519 -a 100 -o -f "$USER_KEY_NAME"
         ssh-keygen -t ed25519 -a 100 -o -f "$USER_KEY_NAME"
