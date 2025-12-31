@@ -52,5 +52,5 @@ elif [[ -z "$OUTPUT_FILENAME" ]]; then
     exit 3
 fi
 
-cat <(echo "WIFI:T:WPA;S:") <(echo -n "$WIFI_NAME" | sed -e 's|[\\";,]|\\&|g') <(echo ";P:") <(sed -e 's|[\\";,]|\\&|g' < "$WIFI_PSSWD_TXT_FILENAME" | tr -d $'\r'$'\n') <(echo ';;') | qr > "$OUTPUT_FILENAME"
+cat <(echo -n "WIFI:T:WPA;S:") <(echo -n "$WIFI_NAME" | sed -e 's|[\\";,]|\\&|g') <(echo -n ";P:") <(sed -e 's|[\\";,]|\\&|g' < "$WIFI_PSSWD_TXT_FILENAME" | tr -d $'\r'$'\n') <(echo -n ';;') | qr > "$OUTPUT_FILENAME"
 echo "Exported qrcode to \"$OUTPUT_FILENAME\"."
